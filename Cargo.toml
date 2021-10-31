@@ -6,3 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+gtk = { version = "0.2", package = "gtk4" }
+tempfile = "3"
+compress-tools = "0.12.2"
+walkdir = "2"
