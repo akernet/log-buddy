@@ -14,6 +14,9 @@ use std::io::{Write};
 
 use walkdir::WalkDir;
 
+use log::{info};
+use simple_logger::SimpleLogger;
+
 fn append_column(tree: &TreeView, id: i32) {
     let column = TreeViewColumn::new();
     let cell = CellRendererText::new();
@@ -28,136 +31,191 @@ fn append_column(tree: &TreeView, id: i32) {
     tree.append_column(&column);
 }
 
-fn build_ui(app: &Application) {
+struct AddFileEvent {
+    name: String
+}
 
-    let window = ApplicationWindow::builder()
-        .application(app)
-        .title("Log Buddy")
-        .default_height(600)
-        .default_width(600)
-        .build();
+enum EventType {
+    AddFileEvent()
+}
 
-    // TODO: implement multiple file drop
-    let drop_target = DropTarget::new(glib::Type::STRING, gdk::DragAction::COPY);
-    drop_target.set_types(&[gtk::gio::File::static_type()]);
+#[derive(Clone)]
+struct Main {
+    sender: gtk::glib::Sender<EventType>,
+    receiver: Rc<gtk::glib::Receiver<EventType>>,
+    application: Rc<Application>
+}
 
-    drop_target.connect_drop(|_, v, _, _| {
-        let file = v.get::<gtk::gio::File>();
-        match &file {
-            Ok(file) => {
-                println!("File! {:?}", file.path());
-                true
-            }
-            _ => {
-                eprintln!("Invalid drop");
-                false
-            }
-        }
-    });
-    window.add_controller(&drop_target);
+impl Main {
+    fn init() -> Rc<Self> {
+        let (sender, receiver) = glib::MainContext::channel(glib::PRIORITY_DEFAULT);
 
-    println!("{:?}", drop_target.actions());
+        let app =  Application::builder()
+            .application_id("se.akernet.logbuddy")
+            .build();
 
+        let s = Rc::new(Self {
+            sender: sender,
+            receiver: Rc::new(receiver),
+            application: Rc::new(app)
+        });
 
-    let model = ListStore::new(&[u32::static_type(), String::static_type()]);
+        Main::connect(s.clone());
 
-    let num_elements = Rc::new(Cell::new(0));
-
-    let entries = &["Michel", "Sara", "Liam", "Zelda", "Neo", "Octopus master"];
-    for (i, entry) in entries.repeat(1000).iter().enumerate() {
-        model.insert_with_values(None, &[(0, &(i as u32 + 1)), (1, &entry)]);
-        num_elements.set(num_elements.get()+1);
+        s
     }
 
-    let tree_view = TreeView::builder()
-        .model(&model)
-        .reorderable(true)
-        .fixed_height_mode(true)
-        .build();
+    fn connect(s: Rc<Main>) {
+        s.application.connect_activate(clone!(@weak s => move |_| {
+            s.build_ui();
+        }));
+    }
 
-    tree_view.set_headers_visible(true);
-    append_column(&tree_view, 0);
-    append_column(&tree_view, 1);
+    fn build_ui(&self) {
+        let window = ApplicationWindow::builder()
+            .application(self.application.as_ref())
+            .title("Log Buddy")
+            .default_height(600)
+            .default_width(600)
+            .build();
 
-    let scrolled_window = gtk::ScrolledWindow::builder()
-        .hscrollbar_policy(gtk::PolicyType::Never) // Disable horizontal scrolling
-        .min_content_width(360)
-        .child(&tree_view)
-        .kinetic_scrolling(true)
-        .vexpand(true)
-        .build();
+        let drop_target_controller = self.get_drop_target_controller();
+        window.add_controller(&drop_target_controller);
 
-    let button1 = Button::builder()
-        .label("test")
-        .build();
-    let button2 = Button::builder()
-        .label("reverse")
-        .build();
+        let model = ListStore::new(&[u32::static_type(), String::static_type()]);
 
-    button1.connect_clicked(clone!(@weak model, @weak num_elements => move |_| {
-        for (i, entry) in entries.clone().repeat(1_000_000).iter().enumerate() {
+        let num_elements = Rc::new(Cell::new(0));
+
+        let entries = &["Michel", "Sara", "Liam", "Zelda", "Neo", "Octopus master"];
+        for (i, entry) in entries.repeat(1000).iter().enumerate() {
             model.insert_with_values(None, &[(0, &(i as u32 + 1)), (1, &entry)]);
             num_elements.set(num_elements.get()+1);
         }
-    }));
-    button2.connect_clicked(clone!(@weak model => move |_| {
-        println!("Starting prep new order {}", num_elements.get());
-        let mut new_order = (0..num_elements.get()).collect::<Vec<u32>>();
-        new_order.reverse();
-        println!("Done prep new order {}", num_elements.get());
-        model.reorder(new_order.as_slice());
-    }));
 
-    let boks = Box::builder()
-        .orientation(Orientation::Vertical)
-        .build();
+        let tree_view = TreeView::builder()
+            .model(&model)
+            .reorderable(true)
+            .fixed_height_mode(true)
+            .build();
 
-    boks.append(&scrolled_window);
-    boks.append(&button1);
-    boks.append(&button2);
+        tree_view.set_headers_visible(true);
+        append_column(&tree_view, 0);
+        append_column(&tree_view, 1);
 
-    window.set_child(Some(&boks));
+        let scrolled_window = gtk::ScrolledWindow::builder()
+            .hscrollbar_policy(gtk::PolicyType::Never) // Disable horizontal scrolling
+            .min_content_width(360)
+            .child(&tree_view)
+            .kinetic_scrolling(true)
+            .vexpand(true)
+            .build();
 
-    window.present();
-}
+        let button1 = Button::builder()
+            .label("test")
+            .build();
+        let button2 = Button::builder()
+            .label("reverse")
+            .build();
 
-fn uncompress_recursive(path: &Path, dest: &Path) {
-    let mut source = File::open(path).unwrap();
-    uncompress_archive(&mut source, dest, Ownership::Ignore).unwrap();
-    drop(source);
+        button1.connect_clicked(clone!(@weak model, @weak num_elements => move |_| {
+            for (i, entry) in entries.clone().repeat(1_000_000).iter().enumerate() {
+                model.insert_with_values(None, &[(0, &(i as u32 + 1)), (1, &entry)]);
+                num_elements.set(num_elements.get()+1);
+            }
+        }));
+        button2.connect_clicked(clone!(@weak model => move |_| {
+            println!("Starting prep new order {}", num_elements.get());
+            let mut new_order = (0..num_elements.get()).collect::<Vec<u32>>();
+            new_order.reverse();
+            println!("Done prep new order {}", num_elements.get());
+            model.reorder(new_order.as_slice());
+        }));
 
-    let files = WalkDir::new(dest)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .filter(|f| f.metadata().unwrap().is_file());
+        let boks = Box::builder()
+            .orientation(Orientation::Vertical)
+            .build();
+
+        boks.append(&scrolled_window);
+        boks.append(&button1);
+        boks.append(&button2);
+
+        window.set_child(Some(&boks));
+
+        window.present();
+    }
+
+    fn get_drop_target_controller(&self) -> DropTarget {
+        // TODO: implement multiple file drop
+        let drop_target = DropTarget::new(glib::Type::STRING, gdk::DragAction::COPY);
+        drop_target.set_types(&[gtk::gio::File::static_type()]);
+
+        drop_target.connect_drop(|_, v, _, _| {
+            let file = v.get::<gtk::gio::File>();
+            match &file {
+                Ok(file) => {
+                    match file.path() {
+                        Some(path) => {
+                            println!("File! {:?}", file.path());
+                            //self.load_file(path);
+                            true
+                        },
+                        _ => {
+                            eprintln!("Couldn't get file path");
+                            false
+                        }
+                    }
+                },
+                _ => {
+                    eprintln!("Invalid drop");
+                    false
+                }
+            }
+        });
+
+        drop_target
+    }
+
+    fn uncompress_recursive(path: &Path, dest: &Path) {
+        let mut source = File::open(path).unwrap();
+        uncompress_archive(&mut source, dest, Ownership::Ignore).unwrap();
+        drop(source);
+
+        let files = WalkDir::new(dest)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|f| f.metadata().unwrap().is_file());
 
 
-    for entry in files {
-        println!("{}", entry.path().display());
+        for entry in files {
+            println!("{}", entry.path().display());
+        }
+    }
+
+
+    fn load_file(&self, path: std::path::PathBuf) {
+        let sender = self.sender.clone();
+        std::thread::spawn(move || {
+
+        });
+    }
+
+    fn run(&self) {
+        self.application.run();
     }
 }
 
 fn main() {
-    // Create a directory inside of `std::env::temp_dir()`.
+    SimpleLogger::new().init().unwrap();
+
     let tmp = tempdir().unwrap();
-
     let file_path = tmp.path().join("my-temporary-note.txt");
-    let mut file = File::create(file_path).unwrap();
-    writeln!(file, "Jens was here. Briefly.").unwrap();
-    println!("Saving to tmp directory: {}", tmp.path().to_str().unwrap());
+    let file = File::create(file_path).unwrap();
+    info!(target: "logbuddy", "Initiated tmp directory at {}", tmp.path().to_str().unwrap());
 
-    let app = Application::builder()
-        .application_id("se.akernet.logbuddy")
-        .build();
+    Main::init().run();
 
-    app.connect_activate(build_ui);
-
-    uncompress_recursive(Path::new("test.tar.gz"), tmp.path());
-    uncompress_recursive(Path::new("test.tar.gz"), tmp.path());
-
-    app.run();
-
+    info!(target: "logbuddy", "Cleaning up tmp directory at {}", tmp.path().to_str().unwrap());
     drop(file);
     tmp.close().unwrap();
-    println!("Goodbye!")
+    info!(target: "logbuddy", "Bye!");
 }

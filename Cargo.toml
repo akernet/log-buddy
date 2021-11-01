@@ -10,3 +10,5 @@ gtk = { version = "0.2", package = "gtk4" }
 tempfile = "3"
 compress-tools = "0.12.2"
 walkdir = "2"
+log = "0.4"
+simple_logger = "1.13.0"
