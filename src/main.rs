@@ -1,5 +1,6 @@
 use gtk::prelude::*;
 use gtk::*;
+use gdk;
 use glib::clone;
 use std::rc::Rc;
 use std::cell::Cell;
@@ -36,14 +37,22 @@ fn build_ui(app: &Application) {
         .default_width(600)
         .build();
 
+    // TODO: implement multiple file drop
+    let drop_target = DropTarget::new(glib::Type::STRING, gdk::DragAction::COPY);
+    drop_target.set_types(&[gtk::gio::File::static_type()]);
 
-    let drop_target = DropTarget::builder().build();
-
-    drop_target.connect_accept(|s, d| {
-        println!("{:?} {:?}", s, d);
-        println!("{:?}", d.formats().unwrap().types());
-        println!("{:?}", d.actions());
-        true
+    drop_target.connect_drop(|_, v, _, _| {
+        let file = v.get::<gtk::gio::File>();
+        match &file {
+            Ok(file) => {
+                println!("File! {:?}", file.path());
+                true
+            }
+            _ => {
+                eprintln!("Invalid drop");
+                false
+            }
+        }
     });
     window.add_controller(&drop_target);
 
