@@ -43,7 +43,7 @@ enum EventType {
 struct Main {
     sender: gtk::glib::Sender<EventType>,
     receiver: Rc<gtk::glib::Receiver<EventType>>,
-    application: Rc<Application>
+    application: Application
 }
 
 impl Main {
@@ -57,7 +57,7 @@ impl Main {
         let s = Rc::new(Self {
             sender: sender,
             receiver: Rc::new(receiver),
-            application: Rc::new(app)
+            application: app
         });
 
         Main::connect(s.clone());
@@ -73,7 +73,7 @@ impl Main {
 
     fn build_ui(&self) {
         let window = ApplicationWindow::builder()
-            .application(self.application.as_ref())
+            .application(&self.application)
             .title("Log Buddy")
             .default_height(600)
             .default_width(600)
