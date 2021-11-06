@@ -73,7 +73,35 @@ impl Main {
         let sidebar = Notebook::builder()
             .build();
 
-        let sidebar_log_file_browser = Box::builder()
+        let sidebar_log_file_browser_list = ListBox::builder()
+            .build();
+
+        // Create a `ListBox` and add labels with integers from 0 to 100
+        for number in 0..=100 {
+            let check = CheckButton::builder()
+                .margin_start(12)
+                .margin_end(12)
+                .margin_top(12)
+                .margin_bottom(12)
+                .active(true)
+                .build();
+            let label = Label::builder()
+                .margin_start(12)
+                .margin_end(12)
+                .margin_top(12)
+                .margin_bottom(12)
+                .label(&number.to_string())
+                .build();
+            let boxx = Box::builder()
+                .build();
+            boxx.append(&check);
+            boxx.append(&label);
+            sidebar_log_file_browser_list.append(&boxx);
+        }
+
+        let sidebar_log_file_browser = ScrolledWindow::builder()
+            .hscrollbar_policy(gtk::PolicyType::Never) // Disable horizontal scrolling
+            .child(&sidebar_log_file_browser_list)
             .build();
         let sidebar_log_file_browser_label = Label::builder()
             .label("Files")
