@@ -3,33 +3,17 @@ use gtk::*;
 use gdk;
 use glib::clone;
 use std::rc::Rc;
-use std::cell::Cell;
 use tempfile::tempdir;
 
 use compress_tools::*;
 use std::fs::File;
 use std::path::Path;
 
-use std::io::{Write};
 
 use walkdir::WalkDir;
 
 use log::{info};
 use simple_logger::SimpleLogger;
-
-fn append_column(tree: &TreeView, id: i32) {
-    let column = TreeViewColumn::new();
-    let cell = CellRendererText::new();
-
-    column.set_sizing(TreeViewColumnSizing::Fixed);
-
-    column.set_resizable(true);
-
-    column.pack_start(&cell, true);
-    // Association of the view's column with the model's `id` column.
-    column.add_attribute(&cell, "text", id);
-    tree.append_column(&column);
-}
 
 struct AddFileEvent {
     name: String
@@ -41,107 +25,108 @@ enum EventType {
 
 #[derive(Clone)]
 struct Main {
-    sender: gtk::glib::Sender<EventType>,
+    sender: Rc<gtk::glib::Sender<EventType>>,
     receiver: Rc<gtk::glib::Receiver<EventType>>,
-    application: Application
+    text_buffer: Rc<TextBuffer>,
+    text_view: Rc<TextView>,
 }
 
 impl Main {
-    fn init() -> Rc<Self> {
-        let (sender, receiver) = glib::MainContext::channel(glib::PRIORITY_DEFAULT);
-
-        let app =  Application::builder()
-            .application_id("se.akernet.logbuddy")
-            .build();
-
-        let s = Rc::new(Self {
-            sender: sender,
-            receiver: Rc::new(receiver),
-            application: app
-        });
-
-        Main::connect(s.clone());
-
-        s
-    }
-
-    fn connect(s: Rc<Main>) {
-        s.application.connect_activate(clone!(@weak s => move |_| {
-            s.build_ui();
-        }));
-    }
-
-    fn build_ui(&self) {
+    fn init(app: &Application) -> Self {
         let window = ApplicationWindow::builder()
-            .application(&self.application)
+            .application(app)
             .title("Log Buddy")
             .default_height(600)
             .default_width(600)
             .build();
 
-        let drop_target_controller = self.get_drop_target_controller();
-        window.add_controller(&drop_target_controller);
+        let (sender, receiver) = glib::MainContext::channel(glib::PRIORITY_DEFAULT);
 
-        let model = ListStore::new(&[u32::static_type(), String::static_type()]);
+        let text_buffer = TextBuffer::builder()
+                    .build();
 
-        let num_elements = Rc::new(Cell::new(0));
-
-        let entries = &["Michel", "Sara", "Liam", "Zelda", "Neo", "Octopus master"];
-        for (i, entry) in entries.repeat(1000).iter().enumerate() {
-            model.insert_with_values(None, &[(0, &(i as u32 + 1)), (1, &entry)]);
-            num_elements.set(num_elements.get()+1);
-        }
-
-        let tree_view = TreeView::builder()
-            .model(&model)
-            .reorderable(true)
-            .fixed_height_mode(true)
+        let text_view = TextView::builder()
+            .vexpand(true)
+            .hexpand(true)
+            .monospace(true)
+            .buffer(&text_buffer)
             .build();
-
-        tree_view.set_headers_visible(true);
-        append_column(&tree_view, 0);
-        append_column(&tree_view, 1);
 
         let scrolled_window = gtk::ScrolledWindow::builder()
             .hscrollbar_policy(gtk::PolicyType::Never) // Disable horizontal scrolling
             .min_content_width(360)
-            .child(&tree_view)
+            .min_content_height(300)
+            .child(&text_view)
             .kinetic_scrolling(true)
             .vexpand(true)
             .build();
 
+        let minimap = DrawingArea::builder()
+            .vexpand(true)
+            .width_request(30)
+            .build();
+
+        let text_view_with_minimap = Box::builder()
+            .orientation(Orientation::Horizontal)
+            .build();
+
+        let s = Self {
+            sender: Rc::new(sender),
+            receiver: Rc::new(receiver),
+            text_buffer: Rc::new(text_buffer),
+            text_view: Rc::new(text_view),
+        };
+
+        let drop_target = s.get_drop_target_controller();
+
+        window.add_controller(&drop_target);
+        s.text_view.add_controller(&drop_target);
+
+        text_view_with_minimap.append(&scrolled_window);
+        text_view_with_minimap.append(&minimap);
+
         let button1 = Button::builder()
             .label("test")
             .build();
-        let button2 = Button::builder()
-            .label("reverse")
+
+        let tag = TextTag::builder()
+            .weight(800)
             .build();
 
-        button1.connect_clicked(clone!(@weak model, @weak num_elements => move |_| {
-            for (i, entry) in entries.clone().repeat(1_000_000).iter().enumerate() {
-                model.insert_with_values(None, &[(0, &(i as u32 + 1)), (1, &entry)]);
-                num_elements.set(num_elements.get()+1);
-            }
-        }));
-        button2.connect_clicked(clone!(@weak model => move |_| {
-            println!("Starting prep new order {}", num_elements.get());
-            let mut new_order = (0..num_elements.get()).collect::<Vec<u32>>();
-            new_order.reverse();
-            println!("Done prep new order {}", num_elements.get());
-            model.reorder(new_order.as_slice());
+        s.text_buffer.tag_table().add(&tag);
+
+        let text_buffer = s.text_buffer.clone();
+        let text_view = s.text_view.clone();
+
+        button1.connect_clicked(clone!(@weak text_buffer => move |_| {
+            let start = text_buffer.iter_at_line(0).unwrap();
+            let end = text_buffer.iter_at_line(5).unwrap();
+            text_buffer.remove_all_tags(&text_buffer.iter_at_offset(0), &text_buffer.iter_at_offset(-1));
+            text_buffer.apply_tag(&tag, &start, &end);
+
+            // Initial logic to find visible lines, more work needed
+            let top_display_coordinate = text_view.window_to_buffer_coords(TextWindowType::Widget, 0, 0).0;
+            let bottom_display_coordinate = text_view.window_to_buffer_coords(TextWindowType::Widget, 0, text_view.height()).0;
+
+            let top_line = text_view.iter_at_position(0, top_display_coordinate).unwrap().0.line();
+            let bottom_line = text_view.iter_at_position(0, bottom_display_coordinate).unwrap().0.line();
+            println!("{} {}", top_line, bottom_line);
+
+            println!("Applied tag! {} {}", start.line(), end.line());
         }));
 
         let boks = Box::builder()
             .orientation(Orientation::Vertical)
             .build();
 
-        boks.append(&scrolled_window);
+        boks.append(&text_view_with_minimap);
         boks.append(&button1);
-        boks.append(&button2);
 
         window.set_child(Some(&boks));
 
         window.present();
+
+        s
     }
 
     fn get_drop_target_controller(&self) -> DropTarget {
@@ -149,14 +134,17 @@ impl Main {
         let drop_target = DropTarget::new(glib::Type::STRING, gdk::DragAction::COPY);
         drop_target.set_types(&[gtk::gio::File::static_type()]);
 
-        drop_target.connect_drop(|_, v, _, _| {
+        drop_target.connect_drop(clone!(@strong self as this => move |_, v, _, _| {
+            // Set the text view back to targetable
+            this.text_view.as_ref().set_can_target(true);
+
             let file = v.get::<gtk::gio::File>();
             match &file {
                 Ok(file) => {
                     match file.path() {
                         Some(path) => {
                             println!("File! {:?}", file.path());
-                            //self.load_file(path);
+                            this.load_file(path);
                             true
                         },
                         _ => {
@@ -170,7 +158,19 @@ impl Main {
                     false
                 }
             }
-        });
+        }));
+
+        drop_target.connect_enter(clone!(@strong self as this => move |a, b, c| {
+            // Disable targeting for the text view since we don't want it to eat
+            // file drops. There is probably a better way to do this
+            this.text_view.as_ref().set_can_target(false);
+            gdk::DragAction::COPY
+        }));
+
+        drop_target.connect_leave(clone!(@strong self as this => move |a| {
+            // Set the text view back to targetable
+            this.text_view.as_ref().set_can_target(true);
+        }));
 
         drop_target
     }
@@ -192,15 +192,13 @@ impl Main {
     }
 
 
+    // Function that takes a path and recursively finds all log lines,
+    // unpacking archives when needed.
     fn load_file(&self, path: std::path::PathBuf) {
-        let sender = self.sender.clone();
+        let sender = self.sender.as_ref().clone();
         std::thread::spawn(move || {
 
         });
-    }
-
-    fn run(&self) {
-        self.application.run();
     }
 }
 
@@ -212,7 +210,15 @@ fn main() {
     let file = File::create(file_path).unwrap();
     info!(target: "logbuddy", "Initiated tmp directory at {}", tmp.path().to_str().unwrap());
 
-    Main::init().run();
+    let app =  Application::builder()
+        .application_id("se.akernet.logbuddy")
+        .build();
+
+    app.connect_activate(|app| {
+        Main::init(app);
+    });
+
+    app.run();
 
     info!(target: "logbuddy", "Cleaning up tmp directory at {}", tmp.path().to_str().unwrap());
     drop(file);
