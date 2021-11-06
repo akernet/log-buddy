@@ -1,3 +1,5 @@
+mod sidebar_file_list;
+
 use gtk::prelude::*;
 use gtk::*;
 use gdk;
@@ -8,12 +10,17 @@ use tempfile::tempdir;
 use compress_tools::*;
 use std::fs::File;
 use std::path::Path;
-
+use std::path::PathBuf;
+use std::io::Read;
+use std::io::prelude::*;
+use std::io::SeekFrom;
 
 use walkdir::WalkDir;
 
-use log::{info};
+use log::{info, debug};
 use simple_logger::SimpleLogger;
+
+use crate::sidebar_file_list::SidebarFileList;
 
 struct AddFileEvent {
     name: String
@@ -29,10 +36,11 @@ struct Main {
     receiver: Rc<gtk::glib::Receiver<EventType>>,
     text_buffer: Rc<TextBuffer>,
     text_view: Rc<TextView>,
+    tmp: Rc<PathBuf>
 }
 
 impl Main {
-    fn init(app: &Application) -> Self {
+    fn init(app: &Application, tmp: PathBuf) -> Self {
         let window = ApplicationWindow::builder()
             .application(app)
             .title("Log Buddy")
@@ -43,7 +51,7 @@ impl Main {
         let (sender, receiver) = glib::MainContext::channel(glib::PRIORITY_DEFAULT);
 
         let text_buffer = TextBuffer::builder()
-                    .build();
+            .build();
 
         let text_view = TextView::builder()
             .vexpand(true)
@@ -76,27 +84,10 @@ impl Main {
         let sidebar_log_file_browser_list = ListBox::builder()
             .build();
 
-        // Create a `ListBox` and add labels with integers from 0 to 100
         for number in 0..=100 {
-            let check = CheckButton::builder()
-                .margin_start(12)
-                .margin_end(12)
-                .margin_top(12)
-                .margin_bottom(12)
-                .active(true)
-                .build();
-            let label = Label::builder()
-                .margin_start(12)
-                .margin_end(12)
-                .margin_top(12)
-                .margin_bottom(12)
-                .label(&number.to_string())
-                .build();
-            let boxx = Box::builder()
-                .build();
-            boxx.append(&check);
-            boxx.append(&label);
-            sidebar_log_file_browser_list.append(&boxx);
+            let label = number.to_string();
+            let file_entry = Self::get_file_list_entry(&label);
+            sidebar_log_file_browser_list.append(&file_entry);
         }
 
         let sidebar_log_file_browser = ScrolledWindow::builder()
@@ -119,13 +110,21 @@ impl Main {
             .label("Highlights")
             .build();
 
+        let sidebar_settings = Box::builder()
+            .orientation(Orientation::Vertical)
+            .build();
+        let sidebar_settings_label = Label::builder()
+            .label("Settings")
+            .build();
+
         sidebar.append_page_menu(&sidebar_log_file_browser, Some(&sidebar_log_file_browser_label), Some(&sidebar_log_file_browser_label));
         sidebar.append_page_menu(&sidebar_log_highlight_browser, Some(&sidebar_log_highlight_browser_label), Some(&sidebar_log_highlight_browser_label));
+        sidebar.append_page_menu(&sidebar_settings, Some(&sidebar_settings_label), Some(&sidebar_settings_label));
 
         let main_split_panes = Paned::builder()
             .start_child(&sidebar)
             .end_child(&text_view_with_minimap)
-            .position(200)
+            .position(300)
             .build();
 
         let s = Self {
@@ -133,6 +132,7 @@ impl Main {
             receiver: Rc::new(receiver),
             text_buffer: Rc::new(text_buffer),
             text_view: Rc::new(text_view),
+            tmp: Rc::new(tmp)
         };
 
         let drop_target = s.get_drop_target_controller();
@@ -222,20 +222,50 @@ impl Main {
         drop_target
     }
 
-    fn uncompress_recursive(path: &Path, dest: &Path) {
-        let mut source = File::open(path).unwrap();
-        uncompress_archive(&mut source, dest, Ownership::Ignore).unwrap();
-        drop(source);
+    fn uncompress_recursive(path: &Path) -> Vec<PathBuf> {
+        // TODO: figure out what this needs to be
+        const BUFFER_LEN: usize = 1000;
 
-        let files = WalkDir::new(dest)
-            .into_iter()
-            .filter_map(|e| e.ok())
-            .filter(|f| f.metadata().unwrap().is_file());
+        let mut source = std::fs::File::open(path).unwrap();
 
+        // Read some bytes and try to figure out file type
+        let mut buffer: [u8; BUFFER_LEN] = [0; BUFFER_LEN];
+        let bytes_read = source.read(&mut buffer).unwrap();
+        let file_kind = infer::Infer::new().get(&buffer[0..bytes_read]);
 
-        for entry in files {
-            println!("{}", entry.path().display());
+        let mut result: Vec<PathBuf> = Vec::new();
+        match file_kind {
+            Some(kind) => {
+                match kind.matcher_type() {
+                    infer::MatcherType::Archive => {
+                        let dirname = path.parent().unwrap();
+                        let new_directory_name = format!("{}_uncompressed", path.file_name().unwrap().to_str().unwrap());
+                        let dest = Path::new(dirname).join(new_directory_name);
+
+                        debug!("Unpacking archive {:?} to new directory {:?}", path, dest);
+                        // Seek back to beginning so uncompress_archive starts reading from the start
+                        source.seek(SeekFrom::Start(0)).unwrap();
+                        uncompress_archive(&mut source, &dest, Ownership::Ignore).unwrap();
+
+                        // Recurse down
+                        WalkDir::new(dest)
+                            .into_iter()
+                            .filter_map(|e| e.ok())
+                            .filter(|f| f.metadata().unwrap().is_file())
+                            .map(|file| Self::uncompress_recursive(file.path()))
+                            .for_each(|file_vector| result.extend(file_vector));
+
+                    }
+                    _ => debug!("Other type for path {:?}", &path)
+                }
+            }
+            None => debug!("Unable to get file type for {:?}", &path)
+        };
+
+        if result.is_empty() {
+            result.push(PathBuf::from(path));
         }
+        result
     }
 
 
@@ -243,9 +273,36 @@ impl Main {
     // unpacking archives when needed.
     fn load_file(&self, path: std::path::PathBuf) {
         let sender = self.sender.as_ref().clone();
+        let tmp_dir = (*self.tmp).clone();
         std::thread::spawn(move || {
-
+            let dest = tmp_dir.as_path().join(path.clone().file_name().unwrap());
+            info!("Copying {:?} to {:?}", path, &dest);
+            std::fs::copy(path.clone(), &dest).unwrap();
+            let res = Self::uncompress_recursive(&dest.as_path());
+            info!("Got file list {:?}", res);
         });
+    }
+
+    fn get_file_list_entry(text: &str) -> Box {
+        let check = CheckButton::builder()
+            .margin_start(12)
+            .margin_end(12)
+            .margin_top(12)
+            .margin_bottom(12)
+            .active(true)
+            .build();
+        let label = Label::builder()
+            .margin_start(12)
+            .margin_end(12)
+            .margin_top(12)
+            .margin_bottom(12)
+            .label(text)
+            .build();
+        let boxx = Box::builder()
+            .build();
+        boxx.append(&check);
+        boxx.append(&label);
+        boxx
     }
 }
 
@@ -253,22 +310,22 @@ fn main() {
     SimpleLogger::new().init().unwrap();
 
     let tmp = tempdir().unwrap();
-    let file_path = tmp.path().join("my-temporary-note.txt");
-    let file = File::create(file_path).unwrap();
     info!(target: "logbuddy", "Initiated tmp directory at {}", tmp.path().to_str().unwrap());
+
 
     let app =  Application::builder()
         .application_id("se.akernet.logbuddy")
         .build();
 
-    app.connect_activate(|app| {
-        Main::init(app);
+    let tmpbuf = PathBuf::from(&tmp.path());
+    app.connect_activate(move |app| {
+        Main::init(app, tmpbuf.clone());
     });
 
     app.run();
 
+
     info!(target: "logbuddy", "Cleaning up tmp directory at {}", tmp.path().to_str().unwrap());
-    drop(file);
     tmp.close().unwrap();
     info!(target: "logbuddy", "Bye!");
 }
