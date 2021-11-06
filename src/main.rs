@@ -70,6 +70,36 @@ impl Main {
             .orientation(Orientation::Horizontal)
             .build();
 
+        let sidebar = Notebook::builder()
+            .build();
+
+        let sidebar_log_file_browser = Box::builder()
+            .build();
+        let sidebar_log_file_browser_label = Label::builder()
+            .label("Files")
+            .build();
+
+        let b1 = Button::builder().label("test1").build();
+        let b2 = Button::builder().label("test2").build();
+
+        let sidebar_log_highlight_browser = Paned::builder()
+            .orientation(Orientation::Vertical)
+            .start_child(&b1)
+            .end_child(&b2)
+            .build();
+        let sidebar_log_highlight_browser_label = Label::builder()
+            .label("Highlights")
+            .build();
+
+        sidebar.append_page_menu(&sidebar_log_file_browser, Some(&sidebar_log_file_browser_label), Some(&sidebar_log_file_browser_label));
+        sidebar.append_page_menu(&sidebar_log_highlight_browser, Some(&sidebar_log_highlight_browser_label), Some(&sidebar_log_highlight_browser_label));
+
+        let main_split_panes = Paned::builder()
+            .start_child(&sidebar)
+            .end_child(&text_view_with_minimap)
+            .position(200)
+            .build();
+
         let s = Self {
             sender: Rc::new(sender),
             receiver: Rc::new(receiver),
@@ -78,16 +108,11 @@ impl Main {
         };
 
         let drop_target = s.get_drop_target_controller();
-
         window.add_controller(&drop_target);
         s.text_view.add_controller(&drop_target);
 
         text_view_with_minimap.append(&scrolled_window);
         text_view_with_minimap.append(&minimap);
-
-        let button1 = Button::builder()
-            .label("test")
-            .build();
 
         let tag = TextTag::builder()
             .weight(800)
@@ -97,7 +122,7 @@ impl Main {
 
         let text_buffer = s.text_buffer.clone();
         let text_view = s.text_view.clone();
-
+        /*
         button1.connect_clicked(clone!(@weak text_buffer => move |_| {
             let start = text_buffer.iter_at_line(0).unwrap();
             let end = text_buffer.iter_at_line(5).unwrap();
@@ -114,15 +139,9 @@ impl Main {
 
             println!("Applied tag! {} {}", start.line(), end.line());
         }));
+        */
 
-        let boks = Box::builder()
-            .orientation(Orientation::Vertical)
-            .build();
-
-        boks.append(&text_view_with_minimap);
-        boks.append(&button1);
-
-        window.set_child(Some(&boks));
+        window.set_child(Some(&main_split_panes));
 
         window.present();
 
