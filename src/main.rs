@@ -8,7 +8,6 @@ use std::rc::Rc;
 use tempfile::tempdir;
 
 use compress_tools::*;
-use std::fs::File;
 use std::path::Path;
 use std::path::PathBuf;
 use std::io::Read;
@@ -143,9 +142,6 @@ impl Main {
 
         s.text_buffer.tag_table().add(&tag);
 
-        let text_buffer = s.text_buffer.clone();
-        let text_view = s.text_view.clone();
-
         receiver.attach(
             None,
             clone!(@strong s =>
@@ -211,14 +207,14 @@ impl Main {
             }
         }));
 
-        drop_target.connect_enter(clone!(@strong self as this => move |a, b, c| {
+        drop_target.connect_enter(clone!(@strong self as this => move |_, _, _| {
             // Disable targeting for the text view since we don't want it to eat
             // file drops. There is probably a better way to do this
             this.text_view.as_ref().set_can_target(false);
             gdk::DragAction::COPY
         }));
 
-        drop_target.connect_leave(clone!(@strong self as this => move |a| {
+        drop_target.connect_leave(clone!(@strong self as this => move |_| {
             // Set the text view back to targetable
             this.text_view.as_ref().set_can_target(true);
         }));

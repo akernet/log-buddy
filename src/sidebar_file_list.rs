@@ -1,5 +1,4 @@
 use gtk::prelude::*;
-use gtk::prelude::*;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
