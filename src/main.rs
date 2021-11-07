@@ -14,6 +14,7 @@ use std::path::PathBuf;
 use std::io::Read;
 use std::io::prelude::*;
 use std::io::SeekFrom;
+use std::sync::{Mutex, Arc};
 
 use walkdir::WalkDir;
 
@@ -22,21 +23,19 @@ use simple_logger::SimpleLogger;
 
 use crate::sidebar_file_list::SidebarFileList;
 
-struct AddFileEvent {
-    name: String
-}
-
+#[derive(Debug)]
 enum EventType {
-    AddFileEvent()
+    UpdateFileListEvent
 }
 
 #[derive(Clone)]
 struct Main {
     sender: Rc<gtk::glib::Sender<EventType>>,
-    receiver: Rc<gtk::glib::Receiver<EventType>>,
     text_buffer: Rc<TextBuffer>,
     text_view: Rc<TextView>,
-    tmp: Rc<PathBuf>
+    tmp: Rc<PathBuf>,
+    sidebar_file_list: Rc<SidebarFileList>,
+    file_list: Arc<Mutex<Option<Vec<PathBuf>>>>,
 }
 
 impl Main {
@@ -81,18 +80,11 @@ impl Main {
         let sidebar = Notebook::builder()
             .build();
 
-        let sidebar_log_file_browser_list = ListBox::builder()
-            .build();
-
-        for number in 0..=100 {
-            let label = number.to_string();
-            let file_entry = Self::get_file_list_entry(&label);
-            sidebar_log_file_browser_list.append(&file_entry);
-        }
+        let sidebar_file_list = SidebarFileList::new();
 
         let sidebar_log_file_browser = ScrolledWindow::builder()
             .hscrollbar_policy(gtk::PolicyType::Never) // Disable horizontal scrolling
-            .child(&sidebar_log_file_browser_list)
+            .child(&sidebar_file_list.tree_view)
             .build();
         let sidebar_log_file_browser_label = Label::builder()
             .label("Files")
@@ -127,12 +119,15 @@ impl Main {
             .position(300)
             .build();
 
+        let file_list = Arc::new(Mutex::new(None));
+
         let s = Self {
             sender: Rc::new(sender),
-            receiver: Rc::new(receiver),
             text_buffer: Rc::new(text_buffer),
             text_view: Rc::new(text_view),
-            tmp: Rc::new(tmp)
+            tmp: Rc::new(tmp),
+            sidebar_file_list: Rc::new(sidebar_file_list),
+            file_list: file_list
         };
 
         let drop_target = s.get_drop_target_controller();
@@ -150,24 +145,33 @@ impl Main {
 
         let text_buffer = s.text_buffer.clone();
         let text_view = s.text_view.clone();
-        /*
-        button1.connect_clicked(clone!(@weak text_buffer => move |_| {
-            let start = text_buffer.iter_at_line(0).unwrap();
-            let end = text_buffer.iter_at_line(5).unwrap();
-            text_buffer.remove_all_tags(&text_buffer.iter_at_offset(0), &text_buffer.iter_at_offset(-1));
-            text_buffer.apply_tag(&tag, &start, &end);
 
-            // Initial logic to find visible lines, more work needed
-            let top_display_coordinate = text_view.window_to_buffer_coords(TextWindowType::Widget, 0, 0).0;
-            let bottom_display_coordinate = text_view.window_to_buffer_coords(TextWindowType::Widget, 0, text_view.height()).0;
+        receiver.attach(
+            None,
+            clone!(@strong s =>
+                move |event| {
+                    println!("{:?}", event);
 
-            let top_line = text_view.iter_at_position(0, top_display_coordinate).unwrap().0.line();
-            let bottom_line = text_view.iter_at_position(0, bottom_display_coordinate).unwrap().0.line();
-            println!("{} {}", top_line, bottom_line);
+                    match event {
+                        EventType::UpdateFileListEvent => {
+                            match s.file_list.lock() {
+                                Ok(file_list_option) => {
+                                    match *file_list_option {
+                                        Some(ref file_list) => {
+                                            s.sidebar_file_list.update(file_list);
+                                        },
+                                        None => {}
+                                    }
+                                },
+                                _ => {}
+                            }
+                        }
+                    }
 
-            println!("Applied tag! {} {}", start.line(), end.line());
-        }));
-        */
+                    Continue(true)
+                }
+            ),
+        );
 
         window.set_child(Some(&main_split_panes));
 
@@ -238,9 +242,9 @@ impl Main {
             Some(kind) => {
                 match kind.matcher_type() {
                     infer::MatcherType::Archive => {
-                        let dirname = path.parent().unwrap();
-                        let new_directory_name = format!("{}_uncompressed", path.file_name().unwrap().to_str().unwrap());
-                        let dest = Path::new(dirname).join(new_directory_name);
+                        let parent_directory = path.parent().unwrap();
+                        let new_directory_name = format!("{}_", path.file_name().unwrap().to_str().unwrap());
+                        let dest = parent_directory.join(new_directory_name);
 
                         debug!("Unpacking archive {:?} to new directory {:?}", path, dest);
                         // Seek back to beginning so uncompress_archive starts reading from the start
@@ -274,35 +278,29 @@ impl Main {
     fn load_file(&self, path: std::path::PathBuf) {
         let sender = self.sender.as_ref().clone();
         let tmp_dir = (*self.tmp).clone();
+
+        let this = self.clone();
         std::thread::spawn(move || {
             let dest = tmp_dir.as_path().join(path.clone().file_name().unwrap());
             info!("Copying {:?} to {:?}", path, &dest);
             std::fs::copy(path.clone(), &dest).unwrap();
-            let res = Self::uncompress_recursive(&dest.as_path());
-            info!("Got file list {:?}", res);
-        });
-    }
+            let file_list = Self::uncompress_recursive(&dest.as_path());
+            info!("Got file list {:?}", file_list);
+            {
+                let mut lock = this.file_list.lock().unwrap();
 
-    fn get_file_list_entry(text: &str) -> Box {
-        let check = CheckButton::builder()
-            .margin_start(12)
-            .margin_end(12)
-            .margin_top(12)
-            .margin_bottom(12)
-            .active(true)
-            .build();
-        let label = Label::builder()
-            .margin_start(12)
-            .margin_end(12)
-            .margin_top(12)
-            .margin_bottom(12)
-            .label(text)
-            .build();
-        let boxx = Box::builder()
-            .build();
-        boxx.append(&check);
-        boxx.append(&label);
-        boxx
+                if lock.is_none() {
+                    *lock = Some(Vec::new());
+                }
+
+                let shared_file_list = lock.as_mut().unwrap();
+                for file in file_list {
+                    shared_file_list.push(file);
+                }
+            }
+
+            sender.send(EventType::UpdateFileListEvent).unwrap();
+        });
     }
 }
 
