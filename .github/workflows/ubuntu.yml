@@ -1,0 +1,37 @@
+name: Rust
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:21.04
+    steps:
+    - name: Update packages
+      run: apt update
+    - name: Install libarchive dependencies
+      run: DEBIAN_FRONTEND=noninteractive apt install --yes --no-install-recommends libarchive-dev
+    - name: Install gtk4 dependencies
+      run: DEBIAN_FRONTEND=noninteractive apt install --yes --no-install-recommends libgtk-4-dev build-essential
+    - name: Install curl and bash
+      run: DEBIAN_FRONTEND=noninteractive apt install --yes --no-install-recommends curl ca-certificates bash
+    - name: Install Rust
+      run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    - name: Source rust
+      shell: bash
+      run: source $HOME/.cargo/env && echo 'source $HOME/.cargo/env' >> $HOME/.bashrc
+    - uses: actions/checkout@v2
+    - name: Build
+      shell: bash
+      run: source $HOME/.cargo/env && cargo build --verbose
+    - name: Run tests
+      shell: bash
+      run: source $HOME/.cargo/env && cargo test --verbose
