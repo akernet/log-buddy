@@ -27,7 +27,7 @@ jobs:
       run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
     - name: Source rust
       shell: bash
-      run: source $HOME/.cargo/env
+      run: source $HOME/.cargo/env && echo 'source $HOME/.cargo/env' >> $HOME/.bashrc
     - uses: actions/checkout@v2
     - name: Build
       shell: bash
