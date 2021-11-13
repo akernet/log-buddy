@@ -18,14 +18,14 @@ jobs:
         with:
           vcpkgArguments: libarchive
           vcpkgTriplet: x64-windows
-          vcpkgGitCommitId: 7dbc05515b44bf54d2a42b4da9d1e1f910868b86
+          vcpkgGitCommitId: 5568f110b509a9fd90711978a7cb76bae75bb092
           useShell: true
       - name: Install GTK
         uses: lukka/run-vcpkg@v7.4
         with:
           vcpkgArguments: gtk
           vcpkgTriplet: x64-windows
-          vcpkgGitCommitId: da0f1cc2bba3acd91be6fad4398368c70448666f
+          vcpkgGitCommitId: 5568f110b509a9fd90711978a7cb76bae75bb092
           useShell: true
       - name: Install stable toolchain
         uses: actions-rs/toolchain@v1
