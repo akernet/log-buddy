@@ -21,6 +21,8 @@ jobs:
       run: DEBIAN_FRONTEND=noninteractive apt install --yes --no-install-recommends libarchive-dev
     - name: Install gtk4 dependencies
       run: DEBIAN_FRONTEND=noninteractive apt install --yes --no-install-recommends libgtk-4-dev build-essential
+    - name: Install curl
+      run: DEBIAN_FRONTEND=noninteractive apt install --yes --no-install-recommends curl
     - name: Install Rust
       run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
     - uses: actions/checkout@v2
