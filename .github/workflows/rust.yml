@@ -11,9 +11,9 @@ env:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
-
+    container:
+      image: ubuntu:21.04
     steps:
     - name: Install libarchive dependencies
       run: sudo apt-get update; sudo apt-get install libarchive-dev
