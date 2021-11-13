@@ -1,0 +1,54 @@
+name: Windows build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build_and_test:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+      - name: Install libarchive
+        uses: lukka/run-vcpkg@v7.4
+        with:
+          vcpkgArguments: libarchive
+          vcpkgTriplet: x64-windows-static
+          vcpkgGitCommitId: 7dbc05515b44bf54d2a42b4da9d1e1f910868b86
+          useShell: true
+      - name: Install libarchive
+        uses: lukka/run-vcpkg@v7.4
+        with:
+          vcpkgArguments: gtk
+          vcpkgTriplet: x64-windows-static
+          vcpkgGitCommitId: da0f1cc2bba3acd91be6fad4398368c70448666f
+          useShell: true
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable-x86_64-pc-windows-msvc
+          profile: minimal
+          override: true
+      - name: Check build
+        uses: actions-rs/cargo@v1
+        env:
+          RUSTFLAGS: '-C target-feature=+crt-static'
+          OPENSSL_ROOT_DIR: 'D:\\a\\compress-tools\\vcpkg\\installed\\stable-x86_64-pc-windows-msvc'
+          VCPKGRS_DYNAMIC: 0
+        with:
+          command: check
+          args: --release --all --bins
+      - name: Test
+        uses: actions-rs/cargo@v1
+        timeout-minutes: 10
+        env:
+          RUSTFLAGS: '-C target-feature=+crt-static'
+          OPENSSL_ROOT_DIR: 'D:\\a\\compress-tools\\vcpkg\\installed\\stable-x86_64-pc-windows-msvc'
+          VCPKGRS_DYNAMIC: 0
+        with:
+          command: test
+          args: --release --all --all-features --no-fail-fast -- --nocapture
