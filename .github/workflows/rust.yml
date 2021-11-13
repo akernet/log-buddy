@@ -15,10 +15,12 @@ jobs:
     container:
       image: ubuntu:21.04
     steps:
+    - name: Update packages
+      run: apt update
     - name: Install libarchive dependencies
-      run: apt update; apt install --yes libarchive-dev
+      run: DEBIAN_FRONTEND=noninteractive apt install --yes --no-install-recommends libarchive-dev
     - name: Install gtk4 dependencies
-      run: apt install --yes libgtk-4-dev build-essential
+      run: DEBIAN_FRONTEND=noninteractive apt install --yes --no-install-recommends libgtk-4-dev build-essential
     - uses: actions/checkout@v2
     - name: Build
       run: cargo build --verbose
