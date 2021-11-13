@@ -1,4 +1,5 @@
 mod sidebar_file_list;
+mod file_handler;
 
 use gtk::prelude::*;
 use gtk::*;
