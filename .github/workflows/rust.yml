@@ -24,7 +24,7 @@ jobs:
     - name: Install curl
       run: DEBIAN_FRONTEND=noninteractive apt install --yes --no-install-recommends curl ca-certificates
     - name: Install Rust
-      run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+      run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y; source $HOME/.cargo/env
     - uses: actions/checkout@v2
     - name: Build
       run: cargo build --verbose
