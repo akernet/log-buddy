@@ -16,9 +16,9 @@ jobs:
       image: ubuntu:21.04
     steps:
     - name: Install libarchive dependencies
-      run: apt update; apt install libarchive-dev
+      run: apt update; apt install --yes libarchive-dev
     - name: Install gtk4 dependencies
-      run: apt install libgtk-4-dev build-essential
+      run: apt install --yes libgtk-4-dev build-essential
     - uses: actions/checkout@v2
     - name: Build
       run: cargo build --verbose
