@@ -31,7 +31,7 @@ jobs:
         shell: bash
       - name: Debug
         run: |
-          find /
+          find C:\msys64\
         shell: bash
       - name: Checkout sources
         uses: actions/checkout@v2
