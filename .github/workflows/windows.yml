@@ -16,6 +16,9 @@ jobs:
           msystem: MINGW64
           update: true
           install: mingw-w64-x86_64-gtk4 mingw-w64-x86_64-pkgconf mingw-w64-x86_64-pkg-config mingw-w64-x86_64-gcc mingw-w64-x86_64-libarchive mingw-w64-x86_64-glib2
+      - shell: msys2 {0}
+        run: |
+          pacman --noconfirm -S --overwrite mingw-w64-x86_64-gtk4 mingw-w64-x86_64-pkgconf mingw-w64-x86_64-gcc
       - name: Install stable toolchain
         uses: actions-rs/toolchain@v1
         with:
@@ -32,10 +35,6 @@ jobs:
       - name: Debug
         run: |
           find C:\\msys64\\
-        shell: bash
-      - name: Debug
-        run: |
-          find $PKG_CONFIG_PATH
         shell: bash
       - name: Checkout sources
         uses: actions/checkout@v2
