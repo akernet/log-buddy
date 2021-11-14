@@ -29,6 +29,10 @@ jobs:
         run: |
           echo "PKG_CONFIG_PATH=C:\msys64\mingw64\pkgconfig" >> $GITHUB_ENV
         shell: bash
+      - name: Debug
+        run: |
+          ls -al $PKG_CONFIG_PATH
+        shell: bash
       - name: Checkout sources
         uses: actions/checkout@v2
       - name: Check build
