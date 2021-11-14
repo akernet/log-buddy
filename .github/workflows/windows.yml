@@ -9,8 +9,7 @@ on:
 jobs:
   build_and_test:
     runs-on: windows-latest
-    env:
-      Path: C:\msys64\mingw64\include;C:\msys64\mingw64\bin;C:\msys64\mingw64\lib
+    
     steps:
       - uses: msys2/setup-msys2@v2
         with:
@@ -23,6 +22,9 @@ jobs:
           toolchain: stable-x86_64-pc-windows-gnu
           profile: minimal
           override: true
+      - run: echo "C:\msys64\mingw64\include" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - run: echo "C:\msys64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - run: echo "C:\msys64\mingw64\lib" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       - name: Checkout sources
         uses: actions/checkout@v2
       - name: Check build
