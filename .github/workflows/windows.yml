@@ -15,7 +15,7 @@ jobs:
         with:
           msystem: MINGW64
           update: true
-          install: mingw-w64-x86_64-gtk4 mingw-w64-x86_64-pkgconf mingw-w64-x86_64-gcc mingw-w64-x86_64-libarchive
+          install: mingw-w64-x86_64-gtk4 mingw-w64-x86_64-pkgconf mingw-w64-x86_64-gcc mingw-w64-x86_64-libarchive mingw-w64-x86_64-glib2
       - name: Install stable toolchain
         uses: actions-rs/toolchain@v1
         with:
