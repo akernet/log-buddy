@@ -33,6 +33,10 @@ jobs:
         run: |
           find C:\\msys64\\
         shell: bash
+      - name: Debug
+        run: |
+          find $PKG_CONFIG_PATH
+        shell: bash
       - name: Checkout sources
         uses: actions/checkout@v2
       - name: Check build
