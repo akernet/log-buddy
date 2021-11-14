@@ -9,7 +9,8 @@ on:
 jobs:
   build_and_test:
     runs-on: windows-latest
-
+    env:
+      Path: C:\msys64\mingw64\include;C:\msys64\mingw64\bin;C:\msys64\mingw64\lib
     steps:
       - uses: msys2/setup-msys2@v2
         with:
