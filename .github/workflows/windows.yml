@@ -11,44 +11,21 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout sources
-        uses: actions/checkout@v2
-      - name: Install libarchive
-        uses: lukka/run-vcpkg@v7.4
+      - uses: msys2/setup-msys2@v2
         with:
-          vcpkgArguments: libarchive
-          vcpkgTriplet: x64-windows
-          vcpkgGitCommitId: f60f3a628ccff9e42deb5f8e81d16acc8b3292dd
-          useShell: true
-      - name: Install GTK
-        uses: lukka/run-vcpkg@v7.4
-        with:
-          vcpkgArguments: gtk
-          vcpkgTriplet: x64-windows
-          vcpkgGitCommitId: f60f3a628ccff9e42deb5f8e81d16acc8b3292dd
-          useShell: true
+          msystem: MINGW64
+          update: true
+          install: mingw-w64-x86_64-gtk4 mingw-w64-x86_64-libarchive
       - name: Install stable toolchain
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable-x86_64-pc-windows-msvc
+          toolchain: stable-gnu
           profile: minimal
           override: true
+      - name: Checkout sources
+        uses: actions/checkout@v2
       - name: Check build
         uses: actions-rs/cargo@v1
-        env:
-          RUSTFLAGS: ''
-          OPENSSL_ROOT_DIR: 'D:\\a\\log-buddy\\vcpkg\\installed\\stable-x86_64-pc-windows-msvc'
-          VCPKGRS_DYNAMIC: 1
         with:
-          command: check
-          args: --release --all --bins
-      - name: Test
-        uses: actions-rs/cargo@v1
-        timeout-minutes: 10
-        env:
-          RUSTFLAGS: ''
-          OPENSSL_ROOT_DIR: 'D:\\a\\log-buddy\\vcpkg\\installed\\stable-x86_64-pc-windows-msvc'
-          VCPKGRS_DYNAMIC: 1
-        with:
-          command: test
-          args: --release --all --all-features --no-fail-fast -- --nocapture
+          command: build
+          args: --release
