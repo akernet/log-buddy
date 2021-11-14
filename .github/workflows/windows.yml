@@ -25,6 +25,8 @@ jobs:
       - run: echo "C:\msys64\mingw64\include" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       - run: echo "C:\msys64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       - run: echo "C:\msys64\mingw64\lib" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - run: echo "C:\msys64\mingw64\pkgconfig" | Out-File -FilePath $env:PKG_CONFIG_PATH -Encoding utf8 -Append
+      - run: echo "C:\msys64\mingw64\pkgconfig" | Out-File -FilePath $env:GITHUB_PKG_CONFIG_PATH -Encoding utf8 -Append
       - name: Checkout sources
         uses: actions/checkout@v2
       - name: Check build
