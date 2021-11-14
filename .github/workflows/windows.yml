@@ -19,6 +19,9 @@ jobs:
       - shell: msys2 {0}
         run: |
           pacman --noconfirm -S --overwrite mingw-w64-x86_64-gtk4 mingw-w64-x86_64-pkgconf mingw-w64-x86_64-gcc
+      - shell: msys2 {0}
+        run: |
+          pacman --noconfirm -S mingw-w64-x86_64-gtk4
       - name: Install stable toolchain
         uses: actions-rs/toolchain@v1
         with:
