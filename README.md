@@ -1,4 +1,4 @@
-# log-buddy (WIP)
+# Log Buddy (WIP)
 Simple log archive viewer using Rust and GTK4.
 
 * Drag and drop archives
