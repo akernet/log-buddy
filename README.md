@@ -2,7 +2,7 @@
 Simple log archive viewer using Rust and GTK4.
 
 * Drag and drop archives
-* Automatic recursive unarchiving with support using libarchive
+* Automatic recursive unarchiving using libarchive
 * Chronological interleaving of log lines
 * TODO: Highlighting & pattern matching
 
