@@ -1,31 +1,31 @@
-mod sidebar_file_list;
 mod file_handler;
+mod sidebar_file_list;
 
-use gtk::prelude::*;
-use gtk::*;
 use gdk;
 use glib::clone;
+use gtk::prelude::*;
+use gtk::*;
 use std::rc::Rc;
 use tempfile::tempdir;
 
 use compress_tools::*;
+use std::io::prelude::*;
+use std::io::Read;
+use std::io::SeekFrom;
 use std::path::Path;
 use std::path::PathBuf;
-use std::io::Read;
-use std::io::prelude::*;
-use std::io::SeekFrom;
-use std::sync::{Mutex, Arc};
+use std::sync::{Arc, Mutex};
 
 use walkdir::WalkDir;
 
-use log::{info, debug};
+use log::{debug, info};
 use simple_logger::SimpleLogger;
 
 use crate::sidebar_file_list::SidebarFileList;
 
 #[derive(Debug)]
 enum EventType {
-    UpdateFileListEvent
+    UpdateFileListEvent,
 }
 
 #[derive(Clone)]
@@ -49,8 +49,7 @@ impl Main {
 
         let (sender, receiver) = glib::MainContext::channel(glib::PRIORITY_DEFAULT);
 
-        let text_buffer = TextBuffer::builder()
-            .build();
+        let text_buffer = TextBuffer::builder().build();
 
         let text_view = TextView::builder()
             .vexpand(true)
@@ -73,12 +72,9 @@ impl Main {
             .width_request(30)
             .build();
 
-        let text_view_with_minimap = Box::builder()
-            .orientation(Orientation::Horizontal)
-            .build();
+        let text_view_with_minimap = Box::builder().orientation(Orientation::Horizontal).build();
 
-        let sidebar = Notebook::builder()
-            .build();
+        let sidebar = Notebook::builder().build();
 
         let sidebar_file_list = SidebarFileList::new();
 
@@ -86,9 +82,7 @@ impl Main {
             .hscrollbar_policy(gtk::PolicyType::Never) // Disable horizontal scrolling
             .child(&sidebar_file_list.tree_view)
             .build();
-        let sidebar_log_file_browser_label = Label::builder()
-            .label("Files")
-            .build();
+        let sidebar_log_file_browser_label = Label::builder().label("Files").build();
 
         let b1 = Button::builder().label("test1").build();
         let b2 = Button::builder().label("test2").build();
@@ -98,20 +92,28 @@ impl Main {
             .start_child(&b1)
             .end_child(&b2)
             .build();
-        let sidebar_log_highlight_browser_label = Label::builder()
-            .label("Highlights")
-            .build();
 
-        let sidebar_settings = Box::builder()
-            .orientation(Orientation::Vertical)
-            .build();
-        let sidebar_settings_label = Label::builder()
-            .label("Settings")
-            .build();
+        let sidebar_log_highlight_browser_label = Label::builder().label("Highlights").build();
 
-        sidebar.append_page_menu(&sidebar_log_file_browser, Some(&sidebar_log_file_browser_label), Some(&sidebar_log_file_browser_label));
-        sidebar.append_page_menu(&sidebar_log_highlight_browser, Some(&sidebar_log_highlight_browser_label), Some(&sidebar_log_highlight_browser_label));
-        sidebar.append_page_menu(&sidebar_settings, Some(&sidebar_settings_label), Some(&sidebar_settings_label));
+        let sidebar_settings = Box::builder().orientation(Orientation::Vertical).build();
+
+        let sidebar_settings_label = Label::builder().label("Settings").build();
+
+        sidebar.append_page_menu(
+            &sidebar_log_file_browser,
+            Some(&sidebar_log_file_browser_label),
+            Some(&sidebar_log_file_browser_label),
+        );
+        sidebar.append_page_menu(
+            &sidebar_log_highlight_browser,
+            Some(&sidebar_log_highlight_browser_label),
+            Some(&sidebar_log_highlight_browser_label),
+        );
+        sidebar.append_page_menu(
+            &sidebar_settings,
+            Some(&sidebar_settings_label),
+            Some(&sidebar_settings_label),
+        );
 
         let main_split_panes = Paned::builder()
             .start_child(&sidebar)
@@ -127,7 +129,7 @@ impl Main {
             text_view: Rc::new(text_view),
             tmp: Rc::new(tmp),
             sidebar_file_list: Rc::new(sidebar_file_list),
-            file_list: file_list
+            file_list: file_list,
         };
 
         let drop_target = s.get_drop_target_controller();
@@ -137,9 +139,7 @@ impl Main {
         text_view_with_minimap.append(&scrolled_window);
         text_view_with_minimap.append(&minimap);
 
-        let tag = TextTag::builder()
-            .weight(800)
-            .build();
+        let tag = TextTag::builder().weight(800).build();
 
         s.text_buffer.tag_table().add(&tag);
 
@@ -223,6 +223,9 @@ impl Main {
         drop_target
     }
 
+    /// Uncompress the archive and all underlying archives recusively
+    ///
+    /// Returns a list of all containing files that are not archives
     fn uncompress_recursive(path: &Path) -> Vec<PathBuf> {
         // TODO: figure out what this needs to be
         const BUFFER_LEN: usize = 1000;
@@ -240,7 +243,8 @@ impl Main {
                 match kind.matcher_type() {
                     infer::MatcherType::Archive => {
                         let parent_directory = path.parent().unwrap();
-                        let new_directory_name = format!("{}_", path.file_name().unwrap().to_str().unwrap());
+                        let new_directory_name =
+                            format!("{}_", path.file_name().unwrap().to_str().unwrap());
                         let dest = parent_directory.join(new_directory_name);
 
                         debug!("Unpacking archive {:?} to new directory {:?}", path, dest);
@@ -255,20 +259,19 @@ impl Main {
                             .filter(|f| f.metadata().unwrap().is_file())
                             .map(|file| Self::uncompress_recursive(file.path()))
                             .for_each(|file_vector| result.extend(file_vector));
-
                     }
-                    _ => debug!("Other type for path {:?}", &path)
+                    _ => debug!("Other type for path {:?}", &path),
                 }
             }
-            None => debug!("Unable to get file type for {:?}", &path)
+            None => debug!("Unable to get file type for {:?}", &path),
         };
 
         if result.is_empty() {
             result.push(PathBuf::from(path));
         }
+
         result
     }
-
 
     // Function that takes a path and recursively finds all log lines,
     // unpacking archives when needed.
@@ -279,10 +282,14 @@ impl Main {
         let this = self.clone();
         std::thread::spawn(move || {
             let dest = tmp_dir.as_path().join(path.clone().file_name().unwrap());
+
             info!("Copying {:?} to {:?}", path, &dest);
             std::fs::copy(path.clone(), &dest).unwrap();
+
             let file_list = Self::uncompress_recursive(&dest.as_path());
             info!("Got file list {:?}", file_list);
+
+            // Lock the file list and add all the paths
             {
                 let mut lock = this.file_list.lock().unwrap();
 
@@ -296,6 +303,7 @@ impl Main {
                 }
             }
 
+            // Notify the GUI thread that we have changed the file list
             sender.send(EventType::UpdateFileListEvent).unwrap();
         });
     }
@@ -307,8 +315,7 @@ fn main() {
     let tmp = tempdir().unwrap();
     info!(target: "logbuddy", "Initiated tmp directory at {}", tmp.path().to_str().unwrap());
 
-
-    let app =  Application::builder()
+    let app = Application::builder()
         .application_id("se.akernet.logbuddy")
         .build();
 
@@ -318,7 +325,6 @@ fn main() {
     });
 
     app.run();
-
 
     info!(target: "logbuddy", "Cleaning up tmp directory at {}", tmp.path().to_str().unwrap());
     tmp.close().unwrap();
